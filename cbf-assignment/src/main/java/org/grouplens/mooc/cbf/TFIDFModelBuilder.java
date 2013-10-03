@@ -73,7 +73,7 @@ public class TFIDFModelBuilder implements Provider<TFIDFModel> {
             // Now the vector is empty (all keys are 'unset').
 
             // TODO Populate the work vector with the number of times each tag is applied to this item.
-            //Map od tags
+            //Map of tags
             List<String> tags = dao.getItemTags(item);
             for(String tag :tags){
                 if( work.containsKey(tagIds.get(tag)) ){
@@ -82,10 +82,6 @@ public class TFIDFModelBuilder implements Provider<TFIDFModel> {
                     work.set(tagIds.get( tag), 1);
                 }
             }
-
-
-
-
 
             // TODO Increment the document frequency vector once for each unique tag on the item.
             LongSortedSet keys = work.keySet();
@@ -96,7 +92,6 @@ public class TFIDFModelBuilder implements Provider<TFIDFModel> {
                     docFreq.set(key, 1);
                 }
             }
-
 
             // Save a shrunk copy of the vector (only storing tags that apply to this item) in
             // our map, we'll add IDF and normalize later.
