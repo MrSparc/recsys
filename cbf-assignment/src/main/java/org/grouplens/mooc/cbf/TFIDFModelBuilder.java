@@ -75,6 +75,7 @@ public class TFIDFModelBuilder implements Provider<TFIDFModel> {
             // TODO Populate the work vector with the number of times each tag is applied to this item.
             //Map of tags
             List<String> tags = dao.getItemTags(item);
+            //For each tag count the number of occurrences
             for(String tag :tags){
                 if( work.containsKey(tagIds.get(tag)) ){
                     work.add(tagIds.get(tag), 1);

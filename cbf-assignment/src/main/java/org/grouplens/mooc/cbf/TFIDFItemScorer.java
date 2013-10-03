@@ -44,8 +44,12 @@ public class TFIDFItemScorer extends AbstractItemScorer {
     @Override
     public void score(long user, @Nonnull MutableSparseVector output) {
         // Get the user's profile, which is a vector with their 'like' for each tag
-        SparseVector userVector = makeUserVector(user);
 
+        /*// Part 1: Using an unweighted User Profile
+        SparseVector userVector = makeUserVector(user);*/
+
+        // Part 2: Using a weighted User Profile
+        SparseVector userVector = makeWeightedUserVector(user);
         // Loop over each item requested and score it.
         // The *domain* of the output vector is the items that we are to score.
         for (VectorEntry e: output.fast(VectorEntry.State.EITHER)) {
@@ -74,6 +78,8 @@ public class TFIDFItemScorer extends AbstractItemScorer {
         // Fill it with 0's initially - they don't like anything
         profile.fill(0);
 
+        //Part 1: Unweighted User Profile
+
         // Iterate over the user's ratings to build their profile
         for (Rating r: userRatings) {
             // In LensKit, ratings are expressions of preference
@@ -86,7 +92,54 @@ public class TFIDFItemScorer extends AbstractItemScorer {
                 profile.add(model.getItemVector(p.getItemId()));
             }
         }
+        // The profile is accumulated, return it.
+        // It is good practice to return a frozen vector.
+        return profile.freeze();
+    }
 
+    private SparseVector makeWeightedUserVector(long user) {
+        // Get the user's ratings
+        List<Rating> userRatings = dao.getEventsForUser(user, Rating.class);
+        if (userRatings == null) {
+            // the user doesn't exist
+            return SparseVector.empty();
+        }
+
+        // Create a new vector over tags to accumulate the user profile
+        MutableSparseVector profile = model.newTagVector();
+        // Fill it with 0's initially - they don't like anything
+        profile.fill(0);
+
+        //Part 2: Weighted User Profile
+
+        // Compute the average of user u's ratings.
+        double uMean = 0.0;
+        long uCount = 0;
+        for (Rating r: userRatings) {
+            // In LensKit, ratings are expressions of preference
+            Preference p = r.getPreference();
+            // We'll never have a null preference. But in LensKit, ratings can have null
+            // preferences to express the user unrating an item
+            if(p != null){
+                uMean +=  p.getValue();
+                uCount +=1;
+            }
+        }
+        uMean = uMean / uCount;
+
+        // Iterate over the user's ratings to build their profile
+        for (Rating r: userRatings) {
+            // In LensKit, ratings are expressions of preference
+            Preference p = r.getPreference();
+            // We'll never have a null preference. But in LensKit, ratings can have null
+            // preferences to express the user unrating an item
+            if (p != null) {
+                double weight = p.getValue() - uMean;
+                MutableSparseVector weightedItemVector = model.getItemVector(p.getItemId()).mutableCopy();
+                weightedItemVector.multiply(weight);
+                profile.add(weightedItemVector);
+            }
+        }
         // The profile is accumulated, return it.
         // It is good practice to return a frozen vector.
         return profile.freeze();
