@@ -12,14 +12,12 @@ import org.grouplens.lenskit.data.history.UserHistory;
 import org.grouplens.lenskit.vectors.MutableSparseVector;
 import org.grouplens.lenskit.vectors.SparseVector;
 import org.grouplens.lenskit.vectors.VectorEntry;
-
 import org.grouplens.lenskit.vectors.similarity.CosineVectorSimilarity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.inject.Inject;
-import java.util.List;
 
 /**
  * User-user item scorer.
@@ -57,7 +55,7 @@ public class SimpleUserUserItemScorer extends AbstractItemScorer {
         for (VectorEntry e: scores.fast(VectorEntry.State.EITHER)) {
             // item (movie ID)
             long i = e.getKey();
-            logger.info("item {}", i);
+            logger.debug("item {}", i);
 
             double sum = 0;
             double weight = 0;
@@ -66,43 +64,50 @@ public class SimpleUserUserItemScorer extends AbstractItemScorer {
             //Get all users who have rated the item
             LongSet potentialNeighbors =  itemDao.getUsersForItem(i);
 
+            // Initialize a vector to save the neighbor's similarities
             MutableSparseVector neighborSimilarities =  MutableSparseVector.create(potentialNeighbors);
-            MutableSparseVector neighborMeanItemRatings =  MutableSparseVector.create(potentialNeighbors);
-
             neighborSimilarities.clear();
-            neighborMeanItemRatings.clear();
-
 
             for (long v : potentialNeighbors){
+                // Do not consider the user for which the scoring is to be done
                 if( v != user){
-                   MutableSparseVector neighborVector = getUserRatingVector(v).mutableCopy();
+                   // Get neighbor ratings
+                   SparseVector neighborVector = getUserRatingVector(v);
 
                     // Neighbor's mean rating mu_v
                     double neighborMeanRating = neighborVector.mean();
 
                     // Compute mean-centered ratings
-                    neighborVector.add(neighborMeanRating * -1.0);
+                    MutableSparseVector neighborMeanVector = neighborVector.mutableCopy();
+                    neighborMeanVector.add(neighborMeanRating * -1.0);
 
-                    // Neighbor's item rating r_v,i
-                    double neighborItemRating = neighborVector.get(i);
-
-                    double vOffset = neighborItemRating - neighborMeanRating;
-
-                    double sim = cosSimilarity.similarity(userMeanVector, neighborVector);
+                    // Compute the cosine similarities
+                    double sim = cosSimilarity.similarity(userMeanVector, neighborMeanVector);
                     neighborSimilarities.set(v, sim);
-                    neighborMeanItemRatings.set(v, vOffset);
+
                    // logger.info("Potential neighbor: user id = {} cosineSimilarity = {}", v, sim);
                 }
 
             }
-            // Sort the neighbors for the similarity value and then use the first 30
+
+            // Sort the neighbors for the similarity value
             LongArrayList neighbors = neighborSimilarities.keysByValue(true);
 
+            // And then use the first 30 users
             for (long v : neighbors.subList(0, 30)){
                 double sim = neighborSimilarities.get(v);
-                double vOffset = neighborMeanItemRatings.get(v);
-                logger.info("Neighbor: user id = {} cosineSimilarity = {} vOffset = {}", v, sim, vOffset);
-                sum += sim * vOffset;
+
+                SparseVector neighborVector  = getUserRatingVector(v);
+                // Neighbor's mean rating mu_v
+                double neighborMeanRating = neighborVector.mean();
+
+                // Neighbor's item rating r_v,i
+                double neighborItemRating = neighborVector.get(i);
+
+                double diffRating = neighborItemRating - neighborMeanRating;
+
+                logger.debug("Neighbor: user id = {} cosineSimilarity = {} diffRating = {}", v, sim, diffRating);
+                sum += sim * diffRating;
                 weight += Math.abs(sim);
             }
 
